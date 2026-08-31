@@ -160,12 +160,13 @@ export interface Settings {
  * is used verbatim and no timezone conversion happens anywhere in the booking
  * path. The date logic in dates.ts already produces exactly this.
  *
- * ⚠️ Only `all_day` is confirmed against a real booking. The half-days are a
- * reasonable reading of the same scheme, not an observed one.
+ * All three confirmed against what Comeen's own web UI sends. The half-days
+ * were guessed first and one guess was wrong: morning ends at 11:59:59, not at
+ * 12:00:00, following the same "last second of the period" pattern as all_day.
  */
 export const SLOT_TIMES: Record<Slot, { start: string; end: string }> = {
     all_day: { start: '00:00:00.000Z', end: '23:59:59.000Z' },
-    morning: { start: '00:00:00.000Z', end: '12:00:00.000Z' },
+    morning: { start: '00:00:00.000Z', end: '11:59:59.000Z' },
     afternoon: { start: '12:00:00.000Z', end: '23:59:59.000Z' },
 };
 

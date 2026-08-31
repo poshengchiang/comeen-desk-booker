@@ -4,6 +4,7 @@ import {
     FLOORS,
     isValidDeskName,
     loadSettings,
+    mergeSettings,
     prunePastSkipDates,
     saveSettings,
     type EndpointConfig,
@@ -365,10 +366,20 @@ function queueSave(): void {
     saveTimer = window.setTimeout(() => { void commit(); }, 300);
 }
 
+/** Set while this popup writes, so its own save does not bounce back as an update. */
+let savingLocally = false;
+
 async function commit(): Promise<void> {
     const { settings, endpointError } = collect();
     current = settings;
-    await saveSettings(settings);
+    savingLocally = true;
+    try {
+        await saveSettings(settings);
+    } finally {
+        // Cleared after the event loop turn, so the change event this write
+        // produces is still seen as local.
+        window.setTimeout(() => { savingLocally = false; }, 0);
+    }
     renderPlan();
     renderAutoNote();
     renderDeskState();
@@ -521,6 +532,37 @@ el<HTMLButtonElement>('copyCaptures').addEventListener('click', async (event) =>
     const original = button.textContent;
     button.textContent = 'Copied';
     window.setTimeout(() => { button.textContent = original; }, 1_400);
+});
+
+/**
+ * Follow changes the popup did not make itself.
+ *
+ * A run started from here already redraws on its reply. This is for everything
+ * else: an automatic run finishing while the panel is open, and the settings the
+ * background writes on its own — the resolved desk id it caches, the cancel
+ * dates it clears once done. Without this the panel quietly shows a stale
+ * picture for as long as it stays open, which is exactly when someone is
+ * watching it to see whether the thing works.
+ */
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+
+    if (changes.runs) {
+        const runs = changes.runs.newValue as RunLog[] | undefined;
+        lastLog = runs?.[0];
+        renderLog(lastLog);
+        renderPlan();
+    }
+
+    // Only re-render from a background write, never from this popup's own save,
+    // or every keystroke would rewrite the field under the cursor.
+    if (changes.settings && !savingLocally) {
+        current = mergeSettings(changes.settings.newValue as Partial<Settings> | undefined);
+        renderSettings(current);
+        renderPlan();
+        renderAutoNote();
+        renderDeskState();
+    }
 });
 
 el<HTMLButtonElement>('clearCaptures').addEventListener('click', async () => {

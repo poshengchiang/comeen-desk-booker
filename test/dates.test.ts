@@ -1,11 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { datesToBook, localWeekday, toLocalISODate, type Weekday } from '../src/core/dates.js';
+import {
+    datesToBook,
+    hasSlotStarted,
+    localWeekday,
+    toLocalISODate,
+    toLocalISODateTime,
+    type Weekday,
+} from '../src/core/dates.js';
 import {
     DEFAULT_SETTINGS,
     isValidDeskName,
     mergeSettings,
     prunePastSkipDates,
+    SLOT_TIMES,
     substitute,
     type Settings,
 } from '../src/core/config.js';
@@ -226,4 +234,48 @@ test('pruning drops only past skip dates, never future ones', () => {
 
 test('pruning keeps today, because today is still bookable', () => {
     assert.deepEqual(prunePastSkipDates(['2026-08-31'], '2026-08-31'), ['2026-08-31']);
+});
+
+// ── a slot whose start has passed ───────────────────────────────────────────
+// Comeen answers such a booking with a 500, and answers its own web UI the same
+// way. Sending it regardless put an error on every run for ever.
+
+test('an all-day slot is over the moment the day begins', () => {
+    // 00:30 local on the 31st: midnight has passed, so today is already gone.
+    const justAfterMidnight = new Date('2026-08-30T22:30:00Z'); // 00:30 in Prague
+    assert.equal(hasSlotStarted('2026-08-31', '00:00:00.000Z', TZ, justAfterMidnight), true);
+    // Tomorrow has not started.
+    assert.equal(hasSlotStarted('2026-09-01', '00:00:00.000Z', TZ, justAfterMidnight), false);
+});
+
+test('an afternoon slot keeps today bookable until noon', () => {
+    const nineInTheMorning = new Date('2026-08-31T07:00:00Z'); // 09:00 in Prague
+    assert.equal(hasSlotStarted('2026-08-31', '12:00:00.000Z', TZ, nineInTheMorning), false);
+
+    const halfPastTwelve = new Date('2026-08-31T10:30:00Z'); // 12:30 in Prague
+    assert.equal(hasSlotStarted('2026-08-31', '12:00:00.000Z', TZ, halfPastTwelve), true);
+});
+
+test('the comparison is made in the target zone, not the machine zone', () => {
+    // 23:30 UTC on the 30th is already 01:30 on the 31st in Prague, so the
+    // all-day slot for the 31st has started even though it is still the 30th
+    // anywhere west of here.
+    const lateUtc = new Date('2026-08-30T23:30:00Z');
+    assert.equal(hasSlotStarted('2026-08-31', '00:00:00.000Z', TZ, lateUtc), true);
+    assert.equal(hasSlotStarted('2026-08-31', '00:00:00.000Z', 'America/New_York', lateUtc), false);
+});
+
+test('local wall-clock time is rendered the way Comeen sends it', () => {
+    assert.equal(
+        toLocalISODateTime(new Date('2026-08-30T22:00:00Z'), TZ),
+        '2026-08-31T00:00:00',
+    );
+});
+
+test('the slot times match what Comeen own UI sends', () => {
+    // Captured from Comeen's own booking calls. morning ending at 11:59:59 and
+    // not 12:00:00 was a corrected guess.
+    assert.deepEqual(SLOT_TIMES.all_day, { start: '00:00:00.000Z', end: '23:59:59.000Z' });
+    assert.deepEqual(SLOT_TIMES.morning, { start: '00:00:00.000Z', end: '11:59:59.000Z' });
+    assert.deepEqual(SLOT_TIMES.afternoon, { start: '12:00:00.000Z', end: '23:59:59.000Z' });
 });

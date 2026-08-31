@@ -1,4 +1,4 @@
-import { datesToBook } from './core/dates.js';
+import { datesToBook, hasSlotStarted } from './core/dates.js';
 import {
     isValidDeskName,
     loadSettings,
@@ -98,16 +98,31 @@ export function runBooking(dryRun: boolean): Promise<RunLog> {
 async function runBookingOnce(dryRun: boolean): Promise<RunLog> {
     const settings: Settings = await loadSettings();
 
-    const dates = datesToBook({
+    const planned = datesToBook({
         weekdays: settings.weekdays,
         horizonDays: settings.horizonDays,
         skipDates: settings.skipDates,
         timeZone: settings.timeZone,
     });
 
-    const base: RunLog = { at: new Date().toISOString(), dryRun, dates, rows: [], notes: [] };
+    // Comeen answers a booking whose start time has passed with a 500, and
+    // answers its own web UI the same way, so this is its behaviour rather than
+    // ours. With the default all-day slot that means today is unbookable from
+    // one second past midnight. Sending it anyway would put an error on every
+    // single run for ever, and an alarm that is always on is not an alarm.
+    const slotStart = SLOT_TIMES[settings.slot].start;
+    const dates = planned.filter((date) => !hasSlotStarted(date, slotStart, settings.timeZone));
+    const startedAlready = planned.filter((date) => hasSlotStarted(date, slotStart, settings.timeZone));
 
-    if (dates.length === 0) {
+    const base: RunLog = { at: new Date().toISOString(), dryRun, dates, rows: [], notes: [] };
+    if (startedAlready.length > 0) {
+        base.notes.push(
+            `Not attempting ${startedAlready.join(', ')}: the ${settings.slot} slot has already `
+            + 'started, and Comeen refuses a booking whose start time has passed.',
+        );
+    }
+
+    if (dates.length === 0 && settings.cancelDates.length === 0) {
         const entry = { ...base, notes: ['No candidate dates in the horizon.'] };
         await appendLog(entry);
         await reflectRun(entry);

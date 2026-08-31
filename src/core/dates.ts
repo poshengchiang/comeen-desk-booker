@@ -26,6 +26,42 @@ export function localWeekday(date: Date, timeZone: string): Weekday {
     return name;
 }
 
+/** Local wall-clock time as `YYYY-MM-DDTHH:mm:ss`, matching what Comeen sends. */
+export function toLocalISODateTime(date: Date, timeZone: string): string {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+    }).formatToParts(date);
+    const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '00';
+    // Intl renders midnight as 24 in some locales/engines.
+    const hour = get('hour') === '24' ? '00' : get('hour');
+    return `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}:${get('second')}`;
+}
+
+/**
+ * Has this day's slot already begun?
+ *
+ * Comeen refuses a booking whose start time is in the past — with a 500 rather
+ * than anything helpful, and it refuses its own web UI just the same, so this
+ * is its behaviour and not something we are doing wrong. For an all-day slot
+ * the start is midnight, so today is unbookable from one second past midnight
+ * onwards. For an afternoon slot, today stays bookable until noon.
+ *
+ * Both sides are naive local wall-clock, which is the whole convention Comeen
+ * uses, so a string comparison is exactly right here.
+ */
+export function hasSlotStarted(
+    date: string,
+    startTime: string,
+    timeZone: string,
+    now = new Date(),
+): boolean {
+    const start = `${date}T${startTime.replace(/\.\d+Z?$/, '').replace(/Z$/, '')}`;
+    return toLocalISODateTime(now, timeZone) >= start;
+}
+
 export interface DatesToBookOptions {
     weekdays: string[];
     horizonDays?: number;

@@ -155,7 +155,7 @@ The extension tells you, in three places, so you never have to wonder whether it
 ```bash
 npm install
 npm run build      # or: npm run watch
-npm test           # 49 tests
+npm test           # 54 tests
 npm run typecheck
 ```
 
@@ -339,7 +339,7 @@ book it.
 Verified: the API contract, against a real captured booking. The date planning (UTC-midnight
 boundary, October DST change), placeholder substitution including the number/string rule, settings
 merging across an `endpointVersion` bump, and the whole in-page booking path — desk resolution by
-uuid, date-keyed idempotency, contention, expired sessions, and failure handling — under 49 unit
+uuid, date-keyed idempotency, contention, expired sessions, and failure handling — under 54 unit
 tests, including the desk-name format rule the popup and the background script both enforce.
 TypeScript strict mode. Bundle shape: content scripts as classic IIFEs, and `bookInPage` self-contained after
 bundling.
@@ -349,8 +349,20 @@ bundling.
 either way. It was settled by calling the list endpoint from the page console with
 `credentials: "include"` and no auth header, which returned 200.
 
-Not verified: the `morning` and `afternoon` slots. Only `all_day` was captured; the half-day
-times in `SLOT_TIMES` are a reading of the same scheme, not an observed one.
+The slot times are confirmed too, against what Comeen's own web UI sends. One guessed value was
+wrong and is corrected: `morning` ends at 11:59:59, not 12:00:00 — the same "last second of the
+period" pattern `all_day` uses.
+
+**Comeen refuses a booking whose start time has already passed**, answering with a 500 rather than
+anything useful — and it answers its own web UI exactly the same way, so this is its behaviour and
+not a fault here. With the default all-day slot that means today is unbookable from one second past
+midnight, so today is dropped from the plan with a note saying why rather than generating an error
+on every run for ever. An afternoon slot keeps today bookable until noon.
+
+Still not verified: the shape of a populated `schedule[]` on a desk record, which is what Preview
+uses to say a day is already taken. It is read defensively and only ever affects what Preview
+reports — a real run attempts the booking regardless, because a misreading must not be able to cost
+a day.
 
 ## Layout
 
@@ -369,7 +381,7 @@ tools/make-icons.mjs     regenerates the icon PNGs from a few numbers
 
 ```bash
 npm run typecheck
-npm test        # 49 tests
+npm test        # 54 tests
 npm run watch   # rebuild on change; still needs a reload in chrome://extensions
 ```
 
