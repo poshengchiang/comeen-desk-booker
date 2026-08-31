@@ -268,8 +268,11 @@ async function reflectRun(entry: RunLog): Promise<void> {
 }
 
 /**
- * Mark the failure as read. Called when the popup opens, because that is where
- * the detail lives: if you have looked at Last run, you know.
+ * Mark the failure as read.
+ *
+ * Sent when the popup opens, and again once it has rendered the result of a run
+ * it started — in that case you were watching the failure appear, so leaving the
+ * badge lit until the panel is closed and reopened contradicts what it means.
  */
 async function clearFailureBadge(): Promise<void> {
     await chrome.action.setBadgeText({ text: '' });
@@ -336,7 +339,7 @@ chrome.notifications.onClicked.addListener((id) => {
 });
 
 chrome.runtime.onMessage.addListener((message: { type?: string; dryRun?: boolean }, _sender, respond) => {
-    if (message?.type === 'popup-opened') {
+    if (message?.type === 'runs-read') {
         void clearFailureBadge();
         respond({ ok: true });
         return false;

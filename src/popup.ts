@@ -491,9 +491,13 @@ renderLog(runs[0]);
 // The plan was drawn before the log was loaded, so colour it in now.
 renderPlan();
 
-// Opening the popup is what marks a failure as read, so the badge clears here
-// rather than waiting for the next successful run.
-void chrome.runtime.sendMessage({ type: 'popup-opened' }).catch(() => { /* worker asleep */ });
+/** Tell the background the failure has been seen, so the badge stops shouting. */
+function markRunsRead(): void {
+    void chrome.runtime.sendMessage({ type: 'runs-read' }).catch(() => { /* worker asleep */ });
+}
+
+// Opening the popup marks a failure as read; so does watching one happen.
+markRunsRead();
 await renderCaptures();
 
 // ── actions ─────────────────────────────────────────────────────────────────
@@ -513,6 +517,8 @@ async function triggerRun(button: HTMLButtonElement, dryRun: boolean): Promise<v
             lastLog = response.log;
             renderLog(response.log);
             renderPlan();
+            // You just watched this happen, so it is not unread news.
+            markRunsRead();
         } else {
             renderLog({
                 at: new Date().toISOString(),
