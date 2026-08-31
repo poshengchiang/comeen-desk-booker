@@ -1,0 +1,6 @@
+node_modules/
+
+# A live Comeen session lives here. Never commit it.
+.chrome-comeen/
+# Captured traffic and app bundles from tools/discover.mjs.
+.discovery/

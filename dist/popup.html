@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Comeen desk booker</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <header>
+        <h1>Comeen desk booker</h1>
+        <span class="saved" id="savedFlag" hidden>Saved</span>
+    </header>
+
+    <section>
+        <div class="row">
+            <label for="deskName">Desk</label>
+            <input type="text" id="deskName" placeholder="3-23" autocomplete="off"
+                   inputmode="text" spellcheck="false">
+        </div>
+        <p class="field-note" id="deskNote"></p>
+        <div class="row">
+            <label for="floorId">Floor</label>
+            <select id="floorId"></select>
+        </div>
+        <div class="row">
+            <label>Building</label>
+            <span class="static" id="buildingName"></span>
+        </div>
+        <div class="row">
+            <label>Weekdays</label>
+            <div class="days" id="days"></div>
+        </div>
+        <div class="row">
+            <label for="slot">Slot</label>
+            <select id="slot">
+                <option value="all_day">All day</option>
+                <option value="morning">Morning</option>
+                <option value="afternoon">Afternoon</option>
+            </select>
+        </div>
+        <div class="row">
+            <label for="horizonDays">Book ahead</label>
+            <input type="number" id="horizonDays" min="1" max="60"> <span class="unit">days</span>
+        </div>
+        <div class="row">
+            <label>Time zone</label>
+            <span class="static" id="timeZoneLabel"></span>
+        </div>
+    </section>
+
+    <section class="plan">
+        <div class="plan-head">
+            <span class="plan-title">Booking plan</span>
+            <span class="hint">click a day to skip it</span>
+        </div>
+        <div id="calendar" class="calendar"></div>
+        <div class="legend">
+            <span><i class="sw sw-book"></i>will book</span>
+            <span><i class="sw sw-skip"></i>skipped</span>
+            <span><i class="sw sw-off"></i>not a chosen weekday</span>
+        </div>
+    </section>
+
+    <div class="actions">
+        <button id="runNow" class="primary">Book now</button>
+        <button id="dryRun">Preview</button>
+    </div>
+
+    <div class="auto">
+        <label class="switch">
+            <input type="checkbox" id="enabled">
+            <span>Book automatically</span>
+        </label>
+        <p class="note" id="autoNote"></p>
+    </div>
+
+    <details open>
+        <summary>Last run</summary>
+        <pre id="log" class="log"></pre>
+    </details>
+
+    <details>
+        <summary>Advanced <span class="hint">rarely needed</span></summary>
+        <p class="note">
+            The desk ID is looked up from the desk name on every run, so leave it empty. Set it
+            only to pin a specific desk when the lookup cannot find one by name.
+        </p>
+        <div class="row">
+            <label for="deskId">Desk ID</label>
+            <input type="text" id="deskId" placeholder="looked up automatically" autocomplete="off">
+        </div>
+        <div class="row">
+            <label for="timeZone">Time zone</label>
+            <input type="text" id="timeZone" placeholder="Europe/Prague" autocomplete="off">
+        </div>
+        <p class="note">
+            The API contract lives here as JSON so you can correct it without rebuilding the
+            extension. Placeholders: <code>{{date}}</code>, <code>{{deskId}}</code>,
+            <code>{{deskName}}</code>, <code>{{slot}}</code>, <code>{{startTime}}</code>,
+            <code>{{endTime}}</code>, <code>{{from}}</code>, <code>{{to}}</code>,
+            <code>{{userId}}</code>, <code>{{floorId}}</code>, <code>{{buildingId}}</code>,
+            <code>{{areaId}}</code>.
+        </p>
+        <textarea id="endpoint" spellcheck="false" rows="14"></textarea>
+    </details>
+
+    <details>
+        <summary>Diagnostics <span class="hint">you should not need this</span></summary>
+        <p class="note">
+            Normal use needs nothing in here. This is for when the endpoint config is wrong and
+            someone has to find the real API — a one-time job for one person, not a setup step.
+        </p>
+        <p class="note">
+            Turn on recording, book one day by hand, and the requests the app made are listed
+            below. Authorization and Cookie values are redacted before storage, and nothing leaves
+            this machine.
+        </p>
+        <label class="switch">
+            <input type="checkbox" id="learnMode">
+            <span>Recording</span>
+        </label>
+        <div class="actions">
+            <button id="copyCaptures">Copy captures</button>
+            <button id="clearCaptures">Clear</button>
+        </div>
+        <pre id="captures" class="log"></pre>
+    </details>
+
+    <script type="module" src="popup.js"></script>
+</body>
+</html>

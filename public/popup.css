@@ -1,0 +1,291 @@
+:root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #6b7280;
+    --border: #e2e5ea;
+    --field: #f7f8fa;
+    --accent: #2563eb;
+    --accent-fg: #ffffff;
+    --ok: #15803d;
+    --warn: #b45309;
+    --err: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #1b1d21;
+        --fg: #e8eaed;
+        --muted: #9aa0a6;
+        --border: #33363b;
+        --field: #24262b;
+        --accent: #5b8cf5;
+        --accent-fg: #10131a;
+        --ok: #58c47a;
+        --warn: #e0a44a;
+        --err: #f0736a;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    width: 380px;
+    margin: 0;
+    padding: 14px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+section { display: grid; gap: 8px; }
+
+.row {
+    display: grid;
+    grid-template-columns: 88px 1fr auto;
+    align-items: center;
+    gap: 8px;
+}
+
+label { color: var(--muted); }
+
+input[type="text"], input[type="number"], select, textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--field);
+    color: var(--fg);
+    font: inherit;
+}
+
+input[type="number"] { width: 72px; }
+.unit { color: var(--muted); }
+
+textarea {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    resize: vertical;
+}
+
+.days { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.days label {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--fg);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.switch { display: inline-flex; align-items: center; gap: 5px; color: var(--fg); cursor: pointer; }
+
+.actions { display: flex; gap: 6px; margin: 12px 0; }
+
+/* A static value the user reads but cannot edit: building, time zone. */
+.static { color: var(--fg); }
+
+/* Sits under a field, aligned with the input rather than the label, so it reads
+   as a property of the box above it. */
+.field-note {
+    margin: -3px 0 0;
+    padding-left: 96px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.field-note.bad { color: var(--err); }
+
+input.bad {
+    border-color: var(--err);
+}
+
+/* Book now carries the weight; Preview is deliberately narrow so the primary
+   action is the obvious one rather than one of three equal buttons. */
+#runNow { flex: 2; }
+#dryRun { flex: 1; }
+
+.saved {
+    color: var(--ok);
+    font-size: 11px;
+    transition: opacity 0.2s;
+}
+
+.auto {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 10px;
+}
+
+.auto .note { margin: 5px 0 0; }
+
+/* ── booking plan calendar ─────────────────────────────────────────────────
+   Doubles as the answer to "what is this going to do", which is why it shows
+   the whole horizon rather than only the exceptions to it. */
+.plan {
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    gap: 6px;
+}
+
+.plan-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.plan-title { font-weight: 600; }
+
+.calendar { display: flex; gap: 12px; }
+
+.month { flex: 1; }
+
+.month-name {
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+    margin-bottom: 3px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.dow {
+    color: var(--muted);
+    font-size: 9px;
+    text-align: center;
+}
+
+.day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--muted);
+    background: none;
+    padding: 0;
+    flex: none;
+}
+
+/* Only candidate days react — clicking a Sunday should do nothing rather than
+   quietly add an entry to skipDates that can never have an effect. */
+.day.clickable { cursor: pointer; }
+.day.clickable:hover { border-color: var(--muted); }
+
+.day.book {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 600;
+}
+
+.day.skip {
+    background: var(--field);
+    border-color: var(--border);
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+.day.past { opacity: 0.3; }
+.day.today { outline: 1px solid var(--muted); outline-offset: -1px; }
+
+.legend {
+    display: flex;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+
+.sw {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    display: inline-block;
+}
+
+.sw-book { background: var(--accent); }
+.sw-skip { background: var(--field); border: 1px solid var(--border); }
+.sw-off { background: transparent; border: 1px solid var(--border); }
+
+button {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--field);
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+}
+
+button:hover { border-color: var(--muted); }
+button:disabled { opacity: 0.55; cursor: progress; }
+
+button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 600;
+}
+
+details {
+    margin-top: 10px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+}
+
+summary { cursor: pointer; font-weight: 600; }
+.hint { color: var(--muted); font-weight: 400; font-size: 11px; }
+
+.note { color: var(--muted); font-size: 11px; margin: 6px 0; }
+
+code {
+    background: var(--field);
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-size: 10px;
+}
+
+.log {
+    max-height: 190px;
+    overflow: auto;
+    margin: 8px 0 0;
+    padding: 8px;
+    background: var(--field);
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.st-booked { color: var(--ok); }
+.st-skipped { color: var(--muted); }
+.st-unavailable { color: var(--warn); }
+.st-error { color: var(--err); }
