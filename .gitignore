@@ -4,3 +4,6 @@ node_modules/
 .chrome-comeen/
 # Captured traffic and app bundles from tools/discover.mjs.
 .discovery/
+
+# Bundles produced by `npm run bundle`.
+*.zip

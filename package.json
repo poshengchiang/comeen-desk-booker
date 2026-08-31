@@ -1,12 +1,13 @@
 {
     "name": "comeen-desk-booker-extension",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "private": true,
     "type": "module",
     "description": "Chrome extension that books a fixed desk in Comeen using the session already open in the browser.",
     "scripts": {
         "build": "node build.mjs",
         "watch": "node build.mjs --watch",
+        "bundle": "node tools/bundle.mjs",
         "typecheck": "tsc --noEmit",
         "test": "tsx --test test/*.test.ts"
     },

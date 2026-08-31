@@ -11,13 +11,15 @@ cannot pin a specific one — this can.
 **You do not need to install any developer tools.** No Node, no terminal, no build step. The
 ready-to-load files are already in this repository. Ten minutes, once.
 
-### 1. Download the code
+### 1. Get the files
 
-On this repository's GitHub page: green **Code** button → **Download ZIP**.
+**Someone sent you a zip?** That is the normal way. Unzip it and skip to step 2.
 
-Unzip it, then **move the folder somewhere permanent** — your home folder or Documents is fine.
-Chrome loads the extension from wherever this folder sits and keeps reading from it, so if you
-leave it in Downloads and later clear that out, the extension stops working.
+**Working from the repository instead?** Green **Code** button → **Download ZIP**, then unzip.
+
+Either way, **move the unzipped folder somewhere permanent** — your home folder or Documents is
+fine. Chrome loads the extension from wherever this folder sits and keeps reading from it, so if
+you leave it in Downloads and later clear that out, the extension stops working.
 
 Inside you will find a folder called `dist`. That is the one Chrome wants. Do not go looking
 inside it.
@@ -157,7 +159,17 @@ npm install
 npm run build      # or: npm run watch
 npm test           # 54 tests
 npm run typecheck
+npm run bundle     # what you send to a colleague
 ```
+
+`npm run bundle` bumps the version, rebuilds, and writes
+`comeen-desk-booker-<version>.zip` containing the README and `dist/` — nothing else, because src/
+and the lockfile only suggest a build step that the recipient does not have.
+
+The version bump is the point of doing this with a command. A zip is dead the moment it is sent,
+and without a version every copy in circulation reports the same number in `chrome://extensions`,
+so "mine is behaving oddly" cannot be told apart from "mine is four builds old". Ask anyone
+reporting a problem what version their extensions page shows.
 
 Then reload the extension in `chrome://extensions` — and reload any open Comeen tab, or its
 already-injected content scripts keep running the previous build and complain about an invalidated
