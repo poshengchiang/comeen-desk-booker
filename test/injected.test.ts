@@ -58,8 +58,10 @@ function scheduleResponse(byDate: Record<string, unknown[]>) {
     };
 }
 
+const BOOKING_ID = 12345;
+
 const BOOKING = {
-    id: 17930827,
+    id: BOOKING_ID,
     period: 'all_day',
     work_activity: 'on_site',
     state: 'pending',
@@ -133,6 +135,7 @@ function argsFor(dates: string[], overrides: Partial<InPageArgs> = {}): InPageAr
         deskName: '3-23',
         deskId: '',
         slot: 'all_day',
+        cancelDates: [],
         startTime: SLOT_TIMES.all_day.start,
         endTime: SLOT_TIMES.all_day.end,
         floorId: FLOOR_ID,
@@ -492,4 +495,113 @@ test('a desk with no schedule entries is simply not flagged', async () => {
 
     const result = await bookInPage(argsFor(['2026-09-01'], { dryRun: true }));
     assert.equal(result.rows[0]?.status, 'dry-run');
+});
+
+// ── cancelling ──────────────────────────────────────────────────────────────
+// The only destructive operation here, so these tests are about what it must
+// NOT do as much as what it must.
+
+test('cancelling deletes by the numeric booking id from the list, not the desk uuid', async () => {
+    const calls = stubBrowser([
+        DESKS_ROUTE,
+        { match: /users\/me\/work_activity_schedule/, json: scheduleResponse({ '2026-09-01': [BOOKING] }) },
+        { match: /work_activity_schedule\/\d+/, method: 'DELETE', status: 204, text: '' },
+    ]);
+
+    const result = await bookInPage(argsFor([], { cancelDates: ['2026-09-01'] }));
+
+    const del = calls.find((call) => call.method === 'DELETE');
+    assert.ok(del, 'expected a DELETE');
+    assert.ok(del.url.endsWith(`/v1/me/work_activity_schedule/${BOOKING_ID}`), del.url);
+    // The desk uuid identifies a desk, not a booking. Sending it here is a 404.
+    assert.ok(!del.url.includes(DESK_UUID));
+
+    assert.deepEqual(result.rows, [{ date: '2026-09-01', status: 'cancelled', detail: undefined }]);
+    assert.deepEqual(result.cancelled, ['2026-09-01']);
+});
+
+test('a day with nothing booked is not an error — the wanted state is already true', async () => {
+    const calls = stubBrowser([
+        DESKS_ROUTE,
+        { match: /users\/me\/work_activity_schedule/, json: scheduleResponse({ '2026-09-01': [] }) },
+    ]);
+
+    const result = await bookInPage(argsFor([], { cancelDates: ['2026-09-01'] }));
+
+    assert.equal(result.rows[0]?.status, 'skipped');
+    assert.equal(calls.filter((call) => call.method === 'DELETE').length, 0);
+    // Still reported done, so it stops being retried on every future run.
+    assert.deepEqual(result.cancelled, ['2026-09-01']);
+});
+
+test('a 404 counts as cancelled, because something else already removed it', async () => {
+    stubBrowser([
+        DESKS_ROUTE,
+        { match: /users\/me\/work_activity_schedule/, json: scheduleResponse({ '2026-09-01': [BOOKING] }) },
+        { match: /work_activity_schedule\/\d+/, method: 'DELETE', status: 404, text: 'not found' },
+    ]);
+
+    const result = await bookInPage(argsFor([], { cancelDates: ['2026-09-01'] }));
+
+    assert.equal(result.rows[0]?.status, 'cancelled');
+    assert.equal(result.rows[0]?.detail, 'already gone');
+});
+
+test('a failed cancellation is not reported as done, so it will be retried', async () => {
+    stubBrowser([
+        DESKS_ROUTE,
+        { match: /users\/me\/work_activity_schedule/, json: scheduleResponse({ '2026-09-01': [BOOKING] }) },
+        { match: /work_activity_schedule\/\d+/, method: 'DELETE', status: 500, text: 'boom' },
+    ]);
+
+    const result = await bookInPage(argsFor([], { cancelDates: ['2026-09-01'] }));
+
+    assert.equal(result.rows[0]?.status, 'error');
+    assert.deepEqual(result.cancelled, []);
+});
+
+test('a preview never deletes anything', async () => {
+    const calls = stubBrowser([
+        DESKS_ROUTE,
+        { match: /users\/me\/work_activity_schedule/, json: scheduleResponse({ '2026-09-01': [BOOKING] }) },
+    ]);
+
+    const result = await bookInPage(argsFor([], { cancelDates: ['2026-09-01'], dryRun: true }));
+
+    assert.equal(result.rows[0]?.status, 'dry-run');
+    assert.match(result.rows[0]?.detail ?? '', /would cancel/);
+    assert.equal(calls.filter((call) => call.method === 'DELETE').length, 0);
+    assert.deepEqual(result.cancelled, []);
+});
+
+test('a date being cancelled is never booked in the same run', async () => {
+    const calls = stubBrowser([
+        DESKS_ROUTE,
+        { match: /users\/me\/work_activity_schedule/, json: scheduleResponse({ '2026-09-01': [BOOKING] }) },
+        { match: /work_activity_schedule\/\d+/, method: 'DELETE', status: 204, text: '' },
+        { match: /users\/\d+\/work_activity_schedule/, method: 'POST', json: BOOKING },
+    ]);
+
+    // Both lists naming the same day is the worst case: cancel then rebook
+    // would leave the booking in place and report success at both ends.
+    await bookInPage(argsFor(['2026-09-01'], { cancelDates: ['2026-09-01'] }));
+
+    assert.equal(calls.filter((call) => call.method === 'DELETE').length, 1);
+    assert.equal(calls.filter((call) => call.method === 'POST').length, 0);
+});
+
+test('the list window stretches to cover a cancellation beyond the booking horizon', async () => {
+    const calls = stubBrowser([
+        DESKS_ROUTE,
+        { match: /users\/me\/work_activity_schedule/, json: scheduleResponse({ '2026-12-24': [BOOKING] }) },
+        { match: /work_activity_schedule\/\d+/, method: 'DELETE', status: 204, text: '' },
+        { match: /users\/\d+\/work_activity_schedule/, method: 'POST', json: BOOKING },
+    ]);
+
+    await bookInPage(argsFor(['2026-09-01'], { cancelDates: ['2026-12-24'] }));
+
+    // A list query that stopped at the booking horizon would never return the
+    // December booking, and the cancellation could never find its id.
+    const list = calls.find((call) => call.url.includes('users/me/work_activity_schedule'));
+    assert.match(list?.url ?? '', /end_date=2026-12-24/);
 });

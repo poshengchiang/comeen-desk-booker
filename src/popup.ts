@@ -122,6 +122,10 @@ function collect(): { settings: Settings; endpointError?: string } {
             horizonDays: Number(fields.horizonDays.value) || DEFAULT_SETTINGS.horizonDays,
             // Owned by the calendar, not by any form field. Pruned on every
             // save so months of past entries do not pile up.
+            cancelDates: prunePastSkipDates(
+                current.cancelDates,
+                toLocalISODate(new Date(), fields.timeZone.value.trim() || DEFAULT_SETTINGS.timeZone),
+            ),
             skipDates: prunePastSkipDates(
                 current.skipDates,
                 toLocalISODate(new Date(), fields.timeZone.value.trim() || DEFAULT_SETTINGS.timeZone),
@@ -182,6 +186,7 @@ function renderPlan(): void {
         }
     };
     const skipped = new Set(current.skipDates);
+    const markedForCancel = new Set(current.cancelDates);
 
     // What the last run found, by date. `booked` and `skipped` both mean "you
     // hold that day" — one just happened now and the other earlier.
@@ -245,9 +250,14 @@ function renderPlan(): void {
             if (markable) {
                 // The user's own choice to skip outranks anything a run found:
                 // it is an instruction, not an observation.
-                const state = skipped.has(iso)
-                    ? 'skip'
-                    : outcome.get(iso) ?? (planned ? 'book' : 'later');
+                // Cancellation is the strongest statement about a day, so it
+                // wins the display: it is both an instruction and destructive,
+                // and must not be hidden behind a "skipped" style.
+                const state = markedForCancel.has(iso)
+                    ? 'cancel'
+                    : skipped.has(iso)
+                        ? 'skip'
+                        : outcome.get(iso) ?? (planned ? 'book' : 'later');
                 cell.classList.add(state, 'clickable');
                 cell.title = {
                     skip: 'Skipped — click to book it',
@@ -258,11 +268,26 @@ function renderPlan(): void {
                     book: 'Click to skip',
                     later: 'Beyond the booking window for now. Click to skip it in advance — it '
                         + 'will be remembered when the window reaches it.',
+                    cancel: 'Will be cancelled in Comeen on the next run. Click to keep it.',
                 }[state] ?? 'Click to skip';
                 cell.addEventListener('click', () => {
-                    current.skipDates = skipped.has(iso)
-                        ? current.skipDates.filter((entry) => entry !== iso)
-                        : [...current.skipDates, iso].sort();
+                    if (state === 'cancel') {
+                        // Undo: stop cancelling, and stop skipping, since the
+                        // skip was only ever there to protect the cancellation.
+                        current.cancelDates = current.cancelDates.filter((entry) => entry !== iso);
+                        current.skipDates = current.skipDates.filter((entry) => entry !== iso);
+                    } else if (state === 'have') {
+                        // You hold this day, so the useful action is to give it
+                        // up rather than merely to stop re-booking it. Skipping
+                        // as well is not optional: without it, the very next run
+                        // would book straight back what this one cancelled.
+                        current.cancelDates = [...current.cancelDates, iso].sort();
+                        current.skipDates = [...new Set([...current.skipDates, iso])].sort();
+                    } else {
+                        current.skipDates = skipped.has(iso)
+                            ? current.skipDates.filter((entry) => entry !== iso)
+                            : [...current.skipDates, iso].sort();
+                    }
                     renderPlan();
                     queueSave();
                 });

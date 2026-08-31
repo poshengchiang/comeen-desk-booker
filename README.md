@@ -80,7 +80,19 @@ Under the fields is a two-month calendar. **Blue squares are the days it is goin
 they look right.
 
 Going away for a week? Click those days and they grey out and get crossed through — those are now
-skipped. Click again to bring them back.
+skipped. Click again to bring them back. **Days beyond the booking window can be marked too** — if
+you already know you are away in six weeks, mark it now and it will be remembered when the window
+reaches it.
+
+Once a run has happened the colours also show what was actually found: **green** is a day you
+already hold, **amber** a day somebody else has, **red** a day that failed. The line above the
+calendar says when those colours were taken, since a run from days ago can still show green for a
+desk since given away.
+
+**To give up a day you have booked**, click its green square. It keeps the green fill and gains a
+red outline: that booking will be cancelled on the next run, and the day is skipped so nothing
+re-books it. Click again to keep it after all. Nothing is cancelled until a run happens, and
+**Preview** will tell you what it is about to remove without removing anything.
 
 ### 9. Preview, then book
 
@@ -92,6 +104,7 @@ per day. Statuses mean:
 | `dry-run` | Free, would be booked |
 | `skipped` | You already have that day |
 | `unavailable` | Somebody else has your desk that day |
+| `cancelled` | A booking you asked to give up has been removed |
 | `error` | Something went wrong; the line says what |
 
 Happy with it? Press **Book now**. Then open Comeen in a tab and confirm the days really are
@@ -142,7 +155,7 @@ The extension tells you, in three places, so you never have to wonder whether it
 ```bash
 npm install
 npm run build      # or: npm run watch
-npm test           # 39 tests
+npm test           # 49 tests
 npm run typecheck
 ```
 
@@ -326,7 +339,7 @@ book it.
 Verified: the API contract, against a real captured booking. The date planning (UTC-midnight
 boundary, October DST change), placeholder substitution including the number/string rule, settings
 merging across an `endpointVersion` bump, and the whole in-page booking path — desk resolution by
-uuid, date-keyed idempotency, contention, expired sessions, and failure handling — under 39 unit
+uuid, date-keyed idempotency, contention, expired sessions, and failure handling — under 49 unit
 tests, including the desk-name format rule the popup and the background script both enforce.
 TypeScript strict mode. Bundle shape: content scripts as classic IIFEs, and `bookInPage` self-contained after
 bundling.
@@ -356,7 +369,7 @@ tools/make-icons.mjs     regenerates the icon PNGs from a few numbers
 
 ```bash
 npm run typecheck
-npm test        # 39 tests
+npm test        # 49 tests
 npm run watch   # rebuild on change; still needs a reload in chrome://extensions
 ```
 

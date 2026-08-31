@@ -248,6 +248,18 @@ input.bad {
     background: transparent;
 }
 
+/* Marked for cancellation. Red outline over the green fill it still has, so it
+   reads as "you hold this, and it is going away" rather than as a plain
+   failure. */
+.day.cancel {
+    background: var(--ok);
+    border-color: var(--err);
+    border-width: 2px;
+    color: var(--on-ok);
+    text-decoration: line-through;
+    font-weight: 600;
+}
+
 .day.past { opacity: 0.3; }
 .day.today { outline: 1px solid var(--muted); outline-offset: -1px; }
 
@@ -271,6 +283,7 @@ input.bad {
 .sw-later { background: transparent; border: 1px solid var(--accent); }
 .sw-have { background: var(--ok); }
 .sw-taken { background: var(--warn); }
+.sw-cancel { background: var(--ok); border: 2px solid var(--err); }
 .sw-skip { background: var(--field); border: 1px solid var(--border); }
 .sw-off { background: transparent; border: 1px solid var(--border); }
 

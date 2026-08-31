@@ -153,6 +153,7 @@ async function runBookingOnce(dryRun: boolean): Promise<RunLog> {
                 deskName: settings.deskName,
                 deskId: settings.deskId,
                 slot: settings.slot,
+                cancelDates: settings.cancelDates,
                 // Resolved out here so the slot-to-times table stays testable
                 // instead of being inlined into the serialized page function.
                 startTime: SLOT_TIMES[settings.slot].start,
@@ -165,9 +166,21 @@ async function runBookingOnce(dryRun: boolean): Promise<RunLog> {
 
         const value = result?.result as InPageResult | undefined;
 
-        // Cache the looked-up id so the next run skips the search entirely.
+        // Settings changes the run itself implies. Batched into one write so a
+        // resolved desk id and a completed cancellation cannot clobber each
+        // other.
+        const updates: Partial<Settings> = {};
         if (value?.resolvedDeskId && value.resolvedDeskId !== settings.deskId) {
-            await saveSettings({ ...settings, deskId: value.resolvedDeskId });
+            updates.deskId = value.resolvedDeskId;
+        }
+        // A cancellation is a one-shot instruction. Leaving a finished one in
+        // place means every later automatic run tries to delete it again.
+        if (!dryRun && value?.cancelled?.length) {
+            const done = new Set(value.cancelled);
+            updates.cancelDates = settings.cancelDates.filter((date) => !done.has(date));
+        }
+        if (Object.keys(updates).length > 0) {
+            await saveSettings({ ...settings, ...updates });
         }
 
         const entry: RunLog = {

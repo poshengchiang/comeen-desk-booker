@@ -26,7 +26,7 @@ export interface AuthConfig {
 }
 
 export interface RequestTemplate {
-    method: 'GET' | 'POST' | 'PUT';
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE';
     /** Path appended to apiBase. May contain placeholders. */
     path: string;
     query?: Record<string, string>;
@@ -95,6 +95,21 @@ export interface EndpointConfig {
      */
     userIdPath: string;
     create: RequestTemplate;
+    /**
+     * Cancel a booking. Set to null to disable cancelling entirely.
+     *
+     * Takes {{bookingId}}, read off the listed booking via listBookingIdFields —
+     * so cancelling depends on `list` working, which is correct: you cannot
+     * cancel what you have not confirmed you hold.
+     */
+    cancel: RequestTemplate | null;
+    /**
+     * Fields on a listed booking that identify it for cancellation, in priority
+     * order. Comeen wants the numeric `id` here, NOT the `uuid` that the same
+     * entry also carries and that the create body uses for the desk. Getting
+     * this wrong is a 404 at best.
+     */
+    listBookingIdFields: string[];
 }
 
 export interface Settings {
@@ -124,6 +139,15 @@ export interface Settings {
     slot: Slot;
     horizonDays: number;
     skipDates: string[];
+    /**
+     * Days whose booking should be cancelled on the next run.
+     *
+     * A one-shot instruction, not a preference: an entry is removed once the
+     * cancellation succeeds, or the next automatic run would keep trying to
+     * delete something already gone. Adding a date here also adds it to
+     * skipDates — otherwise the same run that cancels it books it straight back.
+     */
+    cancelDates: string[];
     timeZone: string;
     endpoint: EndpointConfig;
 }
@@ -166,7 +190,7 @@ export const SLOT_TIMES: Record<Slot, { start: string; end: string }> = {
 export const DEFAULT_SETTINGS: Settings = {
     // ⬆ BUMP THIS whenever you correct the `endpoint` block below, otherwise
     // anyone who already pressed Save keeps their stale copy forever.
-    endpointVersion: 3,
+    endpointVersion: 4,
     enabled: false,
     // Empty on purpose. Shipping a real desk number as the default means the
     // first person to install this and press Book now takes somebody else's
@@ -179,6 +203,7 @@ export const DEFAULT_SETTINGS: Settings = {
     slot: 'all_day',
     horizonDays: 14,
     skipDates: [],
+    cancelDates: [],
     timeZone: 'Europe/Prague',
     endpoint: {
         apiBase: 'https://my.comeen.io/api',
@@ -207,6 +232,7 @@ export const DEFAULT_SETTINGS: Settings = {
         listShape: 'dateKeyedMap',
         listDateFields: ['start_datetime', 'date'],
         userIdPath: 'user.id',
+        listBookingIdFields: ['id', 'uuid'],
         create: {
             method: 'POST',
             // The `me` alias works for reads; the app itself uses the numeric
@@ -225,6 +251,14 @@ export const DEFAULT_SETTINGS: Settings = {
                 },
                 desk_booking: { desk_uuid: '{{deskId}}' },
             },
+        },
+        cancel: {
+            method: 'DELETE',
+            // Note `/me/`, not `/users/{{userId}}/` as create uses, and the
+            // numeric booking id rather than its uuid. Both confirmed from a
+            // captured cancellation; neither is what you would have guessed
+            // from the create call.
+            path: '/v1/me/work_activity_schedule/{{bookingId}}',
         },
     },
 };

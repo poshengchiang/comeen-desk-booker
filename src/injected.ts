@@ -8,6 +8,8 @@ export interface InPageArgs {
     /** Internal id. Only used when no resolve endpoint is configured. */
     deskId: string;
     slot: string;
+    /** Days whose existing booking should be cancelled. */
+    cancelDates: string[];
     /** Naive local times for the slot, e.g. "00:00:00.000Z". */
     startTime: string;
     endTime: string;
@@ -16,7 +18,7 @@ export interface InPageArgs {
     dryRun: boolean;
 }
 
-export type InPageStatus = 'booked' | 'skipped' | 'dry-run' | 'unavailable' | 'error';
+export type InPageStatus = 'booked' | 'cancelled' | 'skipped' | 'dry-run' | 'unavailable' | 'error';
 
 export interface InPageRow {
     date: string;
@@ -40,6 +42,12 @@ export interface InPageResult {
      * on it: it badges, notifies, and retries when you next visit Comeen.
      */
     signedOut?: boolean;
+    /**
+     * Dates whose cancellation is done with, so the caller can drop them from
+     * cancelDates. Without this an automatic run retries every past
+     * cancellation forever.
+     */
+    cancelled?: string[];
 }
 
 /**
@@ -59,6 +67,7 @@ export interface InPageResult {
  */
 export async function bookInPage(args: InPageArgs): Promise<InPageResult> {
     const { endpoint, dates, deskName, slot, startTime, endTime, dryRun } = args;
+    const cancelDates = args.cancelDates ?? [];
     const notes: string[] = [];
     const rows: InPageRow[] = [];
     let deskId = args.deskId;
@@ -79,8 +88,11 @@ export async function bookInPage(args: InPageArgs): Promise<InPageResult> {
         endTime,
         floorId: String(args.floorId),
         buildingId: String(args.buildingId),
-        from: dates[0] ?? '',
-        to: dates[dates.length - 1] ?? '',
+        // The window must span both what is being booked and what is being
+        // cancelled: a booking marked for cancellation next month is invisible
+        // to a list query that stops at the booking horizon.
+        from: [...dates, ...cancelDates].sort()[0] ?? '',
+        to: [...dates, ...cancelDates].sort().pop() ?? '',
     };
 
     // Diagnostics for every failure path. Key NAMES only, never values, so this
@@ -317,6 +329,8 @@ export async function bookInPage(args: InPageArgs): Promise<InPageResult> {
 
     // ── 2. what do I already have? ──────────────────────────────────────────
     const heldDates = new Set<string>();
+    /** date → the id that cancelling one needs. */
+    const bookingIds = new Map<string, string>();
 
     if (endpoint.list) {
         const res = await call(endpoint.list, vars);
@@ -345,7 +359,25 @@ export async function bookInPage(args: InPageArgs): Promise<InPageResult> {
                 // entry is a day already spoken for.
                 if (container && typeof container === 'object' && !Array.isArray(container)) {
                     for (const [date, entries] of Object.entries(container as Record<string, unknown>)) {
-                        if (Array.isArray(entries) && entries.length > 0) heldDates.add(date.slice(0, 10));
+                        if (!Array.isArray(entries) || entries.length === 0) continue;
+                        const day = date.slice(0, 10);
+                        heldDates.add(day);
+                        // One entry per day. Verified rather than assumed: across
+                        // every captured response, no date ever carried more than
+                        // one work activity — Comeen's model is one per day. A
+                        // 61-day query also came back with exactly 61 date keys
+                        // and no pagination fields, so this response is complete
+                        // for its window and nothing here is being truncated.
+                        const first = entries[0] as Record<string, unknown> | undefined;
+                        if (first) {
+                            for (const field of endpoint.listBookingIdFields) {
+                                const value = first[field];
+                                if (value !== undefined && value !== null) {
+                                    bookingIds.set(day, String(value));
+                                    break;
+                                }
+                            }
+                        }
                     }
                     notes.push(`Found ${heldDates.size} day(s) already booked in the window.`);
                 } else {
@@ -360,7 +392,15 @@ export async function bookInPage(args: InPageArgs): Promise<InPageResult> {
                     for (const field of endpoint.listDateFields) {
                         const value = booking[field];
                         if (typeof value === 'string' && value) {
-                            heldDates.add(value.slice(0, 10));
+                            const day = value.slice(0, 10);
+                            heldDates.add(day);
+                            for (const idField of endpoint.listBookingIdFields) {
+                                const id = booking[idField];
+                                if (id !== undefined && id !== null) {
+                                    bookingIds.set(day, String(id));
+                                    break;
+                                }
+                            }
                             break;
                         }
                     }
@@ -377,8 +417,59 @@ export async function bookInPage(args: InPageArgs): Promise<InPageResult> {
         if (endpoint.userIdPath) notes.push('Falling back to /users/me for the booking path.');
     }
 
-    // ── 3. book the gaps ────────────────────────────────────────────────────
+    // ── 3. cancel what was asked for ────────────────────────────────────────
+    // Before booking, so that a date somehow present in both lists ends up
+    // cancelled rather than cancelled-then-immediately-rebooked.
+    const cancelled = new Set<string>();
+
+    for (const date of cancelDates) {
+        if (!endpoint.cancel) {
+            rows.push({ date, status: 'error', detail: 'no cancel endpoint configured' });
+            continue;
+        }
+
+        const bookingId = bookingIds.get(date);
+        if (!bookingId) {
+            // Nothing to delete: already gone, or never held. Either way the
+            // desired state is reached, so this is not a failure.
+            rows.push({ date, status: 'skipped', detail: 'nothing booked to cancel' });
+            cancelled.add(date);
+            continue;
+        }
+
+        if (dryRun) {
+            rows.push({ date, status: 'dry-run', detail: `would cancel booking ${bookingId}` });
+            continue;
+        }
+
+        try {
+            const res = await call(endpoint.cancel, { ...vars, date, bookingId });
+            if (res.signedOut) {
+                rows.push({ date, status: 'error', detail: 'not signed in' });
+                notes.push('Signed out before cancelling. Sign in and run again.');
+                signedOut = true;
+                break;
+            }
+            if (res.ok || res.status === 404) {
+                // 404 means somebody or something already removed it. The end
+                // state is what was wanted, so report it as done.
+                rows.push({ date, status: 'cancelled', detail: res.status === 404 ? 'already gone' : undefined });
+                cancelled.add(date);
+            } else {
+                rows.push({ date, status: 'error', detail: `${res.status}: ${res.text.slice(0, 200)}` });
+            }
+        } catch (err) {
+            rows.push({ date, status: 'error', detail: err instanceof Error ? err.message : String(err) });
+        }
+    }
+
+    // ── 4. book the gaps ────────────────────────────────────────────────────
     for (const date of dates) {
+        // Belt and braces: the popup adds a cancelled day to skipDates too, so
+        // it should not appear here at all. If it somehow does, cancelling and
+        // then rebooking in one run would be the worst possible outcome.
+        if (cancelDates.includes(date)) continue;
+
         if (heldDates.has(date)) {
             rows.push({ date, status: 'skipped', detail: 'already booked' });
             continue;
@@ -421,5 +512,5 @@ export async function bookInPage(args: InPageArgs): Promise<InPageResult> {
         }
     }
 
-    return { rows, notes, resolvedDeskId, signedOut };
+    return { rows, notes, resolvedDeskId, signedOut, cancelled: [...cancelled] };
 }
