@@ -6,12 +6,19 @@ import {
     loadSettings,
     mergeSettings,
     prunePastSkipDates,
+    SLOT_TIMES,
     saveSettings,
     type EndpointConfig,
     type Settings,
     type Slot,
 } from './core/config.js';
-import { datesToBook, localWeekday, toLocalISODate, type Weekday } from './core/dates.js';
+import {
+    datesToBook,
+    hasSlotStarted,
+    localWeekday,
+    toLocalISODate,
+    type Weekday,
+} from './core/dates.js';
 import type { RunLog } from './background.js';
 
 const DAYS: Weekday[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -189,6 +196,11 @@ function renderPlan(): void {
     const skipped = new Set(current.skipDates);
     const markedForCancel = new Set(current.cancelDates);
 
+    // The run drops a day whose slot has already started, so the plan must not
+    // keep drawing it as a day that will be booked. Same rule, same source,
+    // rather than two places deciding separately what today means.
+    const slotStart = SLOT_TIMES[current.slot].start;
+
     // What the last run found, by date. `booked` and `skipped` both mean "you
     // hold that day" — one just happened now and the other earlier.
     const outcome = new Map<string, string>();
@@ -254,12 +266,19 @@ function renderPlan(): void {
                 // Cancellation is the strongest statement about a day, so it
                 // wins the display: it is both an instruction and destructive,
                 // and must not be hidden behind a "skipped" style.
+                // Ranked, most emphatic first. `late` sits below anything the
+                // last run found: a day you already hold is worth showing as
+                // held even once its slot has started.
+                const tooLate = planned && hasSlotStarted(iso, slotStart, current.timeZone);
                 const state = markedForCancel.has(iso)
                     ? 'cancel'
                     : skipped.has(iso)
                         ? 'skip'
-                        : outcome.get(iso) ?? (planned ? 'book' : 'later');
-                cell.classList.add(state, 'clickable');
+                        : outcome.get(iso) ?? (tooLate ? 'late' : planned ? 'book' : 'later');
+                // Nothing to decide about a day that cannot be booked either
+                // way, so it does not invite a click.
+                cell.classList.add(state);
+                if (state !== 'late') cell.classList.add('clickable');
                 cell.title = {
                     skip: 'Skipped — click to book it',
                     have: 'You already have this day. Clicking stops future runs re-booking it; '
@@ -270,7 +289,15 @@ function renderPlan(): void {
                     later: 'Beyond the booking window for now. Click to skip it in advance — it '
                         + 'will be remembered when the window reaches it.',
                     cancel: 'Will be cancelled in Comeen on the next run. Click to keep it.',
+                    late: `Too late — the ${current.slot.replace('_', ' ')} slot has already `
+                        + 'started, and Comeen refuses a booking whose start time has passed. '
+                        + 'Book it by hand if you still need it.',
                 }[state] ?? 'Click to skip';
+                if (state === 'late') {
+                    grid.append(cell);
+                    continue;
+                }
+
                 cell.addEventListener('click', () => {
                     if (state === 'cancel') {
                         // Undo: stop cancelling, and stop skipping, since the

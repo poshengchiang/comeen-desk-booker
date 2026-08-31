@@ -260,6 +260,11 @@ input.bad {
     font-weight: 600;
 }
 
+/* Its slot has already started, so it cannot be booked. Dimmed like a past day
+   because that is what it is: the window for it has gone. The tooltip carries
+   the reason, which keeps it out of an already six-item legend. */
+.day.late { opacity: 0.35; }
+
 .day.past { opacity: 0.3; }
 .day.today { outline: 1px solid var(--muted); outline-offset: -1px; }
 
