@@ -14,10 +14,18 @@ import { DEFAULT_SETTINGS, SLOT_TIMES } from '../src/core/config.js';
 
 // ── fixtures, trimmed from the real capture ─────────────────────────────────
 
-const DESK_UUID = '567bd25f-d9f9-4c75-bb50-e50ddebc10a2';
-const USER_ID = 1798639;
+// Deliberately invented, and deliberately not the shipped defaults either.
+// A test that asserts the request body against the same constants the
+// implementation reads would pass even if those constants were wrong; passing
+// distinct values in and looking for them coming out is what actually proves
+// the substitution works.
+const DESK_UUID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const USER_ID = 999999;
+const FLOOR_ID = 7777;
+const AREA_ID = 8888;
+const BUILDING_ID = 6666;
 
-/** /v1/floors/4952/desks_schedule.json — note there is no `id`, only `uuid`. */
+/** /v1/floors/<id>/desks_schedule.json — note there is no `id`, only `uuid`. */
 const DESKS = [
     {
         uuid: 'bb2451cb-3fb4-4ce5-ae53-c461758d5574',
@@ -25,8 +33,8 @@ const DESKS = [
         sync_id: '3-01',
         available_to_booking: true,
         person_id: null,
-        floor_id: 4952,
-        area_id: 6711,
+        floor_id: FLOOR_ID,
+        area_id: 4321,
         schedule: [],
     },
     {
@@ -35,8 +43,8 @@ const DESKS = [
         sync_id: '3-23',
         available_to_booking: true,
         person_id: null,
-        floor_id: 4952,
-        area_id: 6712,
+        floor_id: FLOOR_ID,
+        area_id: AREA_ID,
         schedule: [],
     },
 ];
@@ -127,8 +135,8 @@ function argsFor(dates: string[], overrides: Partial<InPageArgs> = {}): InPageAr
         slot: 'all_day',
         startTime: SLOT_TIMES.all_day.start,
         endTime: SLOT_TIMES.all_day.end,
-        floorId: DEFAULT_SETTINGS.floorId,
-        buildingId: DEFAULT_SETTINGS.buildingId,
+        floorId: FLOOR_ID,
+        buildingId: BUILDING_ID,
         dryRun: false,
         ...overrides,
     };
@@ -192,9 +200,9 @@ test('the booking request matches what the app itself sends', async () => {
             // Numbers, not strings: a whole-value placeholder resolving to an
             // integer is emitted as JSON number. area_id is the DESK's area,
             // read off the resolved record rather than configured.
-            building_id: 5151,
-            floor_id: 4952,
-            area_id: 6712,
+            building_id: BUILDING_ID,
+            floor_id: FLOOR_ID,
+            area_id: AREA_ID,
         },
         desk_booking: { desk_uuid: DESK_UUID },
     });

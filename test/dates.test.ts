@@ -130,24 +130,24 @@ test('a current-version local endpoint edit is respected', () => {
         'someone mid-diagnostics must not have their edit reverted');
 });
 
-// ── numeric placeholders. Comeen's presence block wants building_id: 5151, and
-// a JSON string "5151" is not the same thing. injected.ts carries a copy of
+// ── numeric placeholders. Comeen's presence block wants a number, and a JSON
+// string "6666" is not the same thing. injected.ts carries a copy of
 // this rule, so these cases pin down the behaviour both must share.
 
 test('a placeholder that is the whole value and resolves to an integer becomes a number', () => {
     assert.deepEqual(
         substitute({ building_id: '{{buildingId}}', desk_uuid: '{{deskId}}' }, {
-            buildingId: '5151',
-            deskId: '567bd25f-d9f9-4c75-bb50-e50ddebc10a2',
+            buildingId: '6666',
+            deskId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
         }),
-        { building_id: 5151, desk_uuid: '567bd25f-d9f9-4c75-bb50-e50ddebc10a2' },
+        { building_id: 6666, desk_uuid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
     );
 });
 
 test('a placeholder inside a larger string stays a string, which is what a path needs', () => {
     assert.equal(
-        substitute('/v1/users/{{userId}}/work_activity_schedule.json', { userId: '1798639' }),
-        '/v1/users/1798639/work_activity_schedule.json',
+        substitute('/v1/users/{{userId}}/work_activity_schedule.json', { userId: '999999' }),
+        '/v1/users/999999/work_activity_schedule.json',
     );
 });
 
