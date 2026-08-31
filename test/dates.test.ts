@@ -5,6 +5,7 @@ import {
     DEFAULT_SETTINGS,
     isValidDeskName,
     mergeSettings,
+    prunePastSkipDates,
     substitute,
     type Settings,
 } from '../src/core/config.js';
@@ -187,4 +188,42 @@ test('anything that is not a desk number is rejected', () => {
 test('the shipped default is empty, so a fresh install cannot book anyone else\'s desk', () => {
     assert.equal(DEFAULT_SETTINGS.deskName, '');
     assert.equal(isValidDeskName(DEFAULT_SETTINGS.deskName), false);
+});
+
+// ── skip dates outlive the horizon ──────────────────────────────────────────
+// Marking a day months ahead is the point, so nothing may quietly discard an
+// entry for being beyond the booking window — only for being in the past.
+
+test('a skip date beyond the horizon still applies once the horizon reaches it', () => {
+    const farOff = '2026-10-05'; // a Monday, well past a 14-day horizon
+    const inWindow = datesToBook({
+        weekdays: ['monday'],
+        horizonDays: 14,
+        skipDates: [farOff],
+        timeZone: TZ,
+        now: TUESDAY,
+    });
+    assert.ok(!inWindow.includes(farOff), 'not in the window yet either way');
+
+    // Same skip list, a horizon long enough to reach it.
+    const reached = datesToBook({
+        weekdays: ['monday'],
+        horizonDays: 60,
+        skipDates: [farOff],
+        timeZone: TZ,
+        now: TUESDAY,
+    });
+    assert.ok(reached.length > 0, 'other Mondays are still booked');
+    assert.ok(!reached.includes(farOff), 'the pre-marked day is honoured');
+});
+
+test('pruning drops only past skip dates, never future ones', () => {
+    assert.deepEqual(
+        prunePastSkipDates(['2026-08-01', '2026-08-30', '2026-08-31', '2026-12-25'], '2026-08-31'),
+        ['2026-08-31', '2026-12-25'],
+    );
+});
+
+test('pruning keeps today, because today is still bookable', () => {
+    assert.deepEqual(prunePastSkipDates(['2026-08-31'], '2026-08-31'), ['2026-08-31']);
 });

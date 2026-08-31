@@ -9,6 +9,9 @@
     --ok: #15803d;
     --warn: #b45309;
     --err: #b91c1c;
+    --on-ok: #ffffff;
+    --on-warn: #ffffff;
+    --on-err: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,6 +26,9 @@
         --ok: #58c47a;
         --warn: #e0a44a;
         --err: #f0736a;
+        --on-ok: #10131a;
+        --on-warn: #10131a;
+        --on-err: #10131a;
     }
 }
 
@@ -210,6 +216,38 @@ input.bad {
     text-decoration: line-through;
 }
 
+/* What the last run actually found, painted over the plan. Distinct hues rather
+   than shades: at 10px, a blue and a slightly lighter blue are the same colour. */
+.day.have {
+    background: var(--ok);
+    border-color: var(--ok);
+    color: var(--on-ok);
+    font-weight: 600;
+}
+
+.day.taken {
+    background: var(--warn);
+    border-color: var(--warn);
+    color: var(--on-warn);
+    font-weight: 600;
+}
+
+.day.failed {
+    background: var(--err);
+    border-color: var(--err);
+    color: var(--on-err);
+    font-weight: 600;
+}
+
+/* A chosen weekday that the horizon has not reached yet. Outlined rather than
+   filled: it is a day you can mark now, but nothing is planned for it — and
+   showing it solid blue would promise a booking the next run will not make. */
+.day.later {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: transparent;
+}
+
 .day.past { opacity: 0.3; }
 .day.today { outline: 1px solid var(--muted); outline-offset: -1px; }
 
@@ -230,8 +268,15 @@ input.bad {
 }
 
 .sw-book { background: var(--accent); }
+.sw-later { background: transparent; border: 1px solid var(--accent); }
+.sw-have { background: var(--ok); }
+.sw-taken { background: var(--warn); }
 .sw-skip { background: var(--field); border: 1px solid var(--border); }
 .sw-off { background: transparent; border: 1px solid var(--border); }
+
+.legend { flex-wrap: wrap; row-gap: 3px; }
+
+.plan-asof { color: var(--muted); font-size: 10px; }
 
 button {
     flex: 1;

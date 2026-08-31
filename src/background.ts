@@ -110,6 +110,7 @@ async function runBookingOnce(dryRun: boolean): Promise<RunLog> {
     if (dates.length === 0) {
         const entry = { ...base, notes: ['No candidate dates in the horizon.'] };
         await appendLog(entry);
+        await reflectRun(entry);
         return entry;
     }
 
@@ -202,13 +203,21 @@ async function runBookingOnce(dryRun: boolean): Promise<RunLog> {
  * you opened the popup — so an automatic run that failed at 3am was, in
  * practice, silent. An automation you cannot tell has stopped is worse than no
  * automation, because you stop checking.
+ *
+ * The badge means "there is a failure you have not read yet", not "the last run
+ * failed". The difference matters: read as the latter, a badge raised by a
+ * signed-out run stayed lit after you signed in and previewed successfully,
+ * with no way to dismiss it, because only a successful real run cleared it.
+ * Automatic switched off, and it stayed lit for good. Opening the popup is what
+ * marks it read — see clearFailureBadge.
  */
 async function reflectRun(entry: RunLog): Promise<void> {
-    // A preview is a question, not an outcome. It must not clear a real
-    // failure's badge, nor raise one of its own.
-    if (entry.dryRun) return;
-
     const failed = Boolean(entry.error) || entry.rows.some((row) => row.status === 'error');
+
+    // A preview cannot exercise the create call, so a clean one is not proof
+    // that booking works and must not clear a real failure. It can still raise
+    // the badge: whatever it hit — signed out, bad desk, API down — is real.
+    if (entry.dryRun && !failed) return;
 
     await chrome.action.setBadgeText({ text: failed ? '!' : '' });
     if (failed) {
@@ -225,9 +234,17 @@ async function reflectRun(entry: RunLog): Promise<void> {
             message: 'Your Comeen session expired. Click here to sign in — booking resumes on '
                 + 'its own once you are back.',
         });
-    } else {
+    } else if (!entry.dryRun) {
         chrome.notifications.clear(SIGNED_OUT_NOTIFICATION);
     }
+}
+
+/**
+ * Mark the failure as read. Called when the popup opens, because that is where
+ * the detail lives: if you have looked at Last run, you know.
+ */
+async function clearFailureBadge(): Promise<void> {
+    await chrome.action.setBadgeText({ text: '' });
 }
 
 /**
@@ -291,6 +308,11 @@ chrome.notifications.onClicked.addListener((id) => {
 });
 
 chrome.runtime.onMessage.addListener((message: { type?: string; dryRun?: boolean }, _sender, respond) => {
+    if (message?.type === 'popup-opened') {
+        void clearFailureBadge();
+        respond({ ok: true });
+        return false;
+    }
     if (message?.type === 'run') {
         runBooking(message.dryRun ?? false)
             .then((log) => respond({ ok: true, log }))

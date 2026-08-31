@@ -258,6 +258,17 @@ export function isValidDeskName(name: string): boolean {
     return DESK_NAME_PATTERN.test(name.trim());
 }
 
+/**
+ * Drop skip dates that have already passed.
+ *
+ * Days can be marked months ahead, so without this the list only ever grows —
+ * a year of "I was away that Tuesday" accumulating in storage and in the
+ * settings JSON, where it is noise that makes the real entries hard to read.
+ */
+export function prunePastSkipDates(skipDates: string[], today: string): string[] {
+    return skipDates.filter((date) => date >= today);
+}
+
 export const FLOORS: { id: number; label: string }[] = [
     { id: 4952, label: 'Floor 3' },
     { id: 4953, label: 'Floor 4' },

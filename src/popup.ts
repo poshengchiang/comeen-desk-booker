@@ -4,12 +4,13 @@ import {
     FLOORS,
     isValidDeskName,
     loadSettings,
+    prunePastSkipDates,
     saveSettings,
     type EndpointConfig,
     type Settings,
     type Slot,
 } from './core/config.js';
-import { datesToBook, toLocalISODate, type Weekday } from './core/dates.js';
+import { datesToBook, localWeekday, toLocalISODate, type Weekday } from './core/dates.js';
 import type { RunLog } from './background.js';
 
 const DAYS: Weekday[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -67,6 +68,13 @@ function selectedDays(): Weekday[] {
 // load. skipDates in particular is mutated by clicking the calendar.
 let current: Settings = await loadSettings();
 
+/**
+ * The most recent run, so the calendar can show what was actually found rather
+ * than only what is planned. Comes from storage on open and is replaced after
+ * every run.
+ */
+let lastLog: RunLog | undefined;
+
 function renderSettings(next: Settings): void {
     fields.enabled.checked = next.enabled;
     fields.deskName.value = next.deskName;
@@ -112,8 +120,12 @@ function collect(): { settings: Settings; endpointError?: string } {
             weekdays: selectedDays(),
             slot: fields.slot.value as Slot,
             horizonDays: Number(fields.horizonDays.value) || DEFAULT_SETTINGS.horizonDays,
-            // Owned by the calendar, not by any form field.
-            skipDates: current.skipDates,
+            // Owned by the calendar, not by any form field. Pruned on every
+            // save so months of past entries do not pile up.
+            skipDates: prunePastSkipDates(
+                current.skipDates,
+                toLocalISODate(new Date(), fields.timeZone.value.trim() || DEFAULT_SETTINGS.timeZone),
+            ),
             timeZone: fields.timeZone.value.trim() || DEFAULT_SETTINGS.timeZone,
             endpoint,
         },
@@ -154,7 +166,39 @@ function renderPlan(): void {
     } catch {
         candidates = new Set();
     }
+
+    // Whether a date is a weekday you come in, ignoring the horizon entirely.
+    // Knowing in September that you are away in October is normal; the horizon
+    // governs what gets booked, and has no business governing what you are
+    // allowed to tell it in advance.
+    const chosenWeekdays = new Set(current.weekdays);
+    const isWorkday = (iso: string): boolean => {
+        try {
+            // Midday avoids any chance of the parsed instant landing on the
+            // previous day once shifted into the target zone.
+            return chosenWeekdays.has(localWeekday(new Date(`${iso}T12:00:00Z`), current.timeZone));
+        } catch {
+            return false;
+        }
+    };
     const skipped = new Set(current.skipDates);
+
+    // What the last run found, by date. `booked` and `skipped` both mean "you
+    // hold that day" — one just happened now and the other earlier.
+    const outcome = new Map<string, string>();
+    for (const row of lastLog?.rows ?? []) {
+        if (row.status === 'booked' || row.status === 'skipped') outcome.set(row.date, 'have');
+        else if (row.status === 'unavailable') outcome.set(row.date, 'taken');
+        else if (row.status === 'error') outcome.set(row.date, 'failed');
+    }
+
+    // A run from days ago can still be showing green for days that have since
+    // been given away, so the plan says how old it is rather than implying it
+    // is live.
+    const asOf = el<HTMLSpanElement>('planAsOf');
+    asOf.textContent = lastLog
+        ? `colours from ${new Date(lastLog.at).toLocaleString()} · click a day to skip it`
+        : 'click a day to skip it';
 
     for (let offset = 0; offset < 2; offset += 1) {
         const month = todayMonth - 1 + offset;
@@ -195,9 +239,26 @@ function renderPlan(): void {
             if (iso < today) cell.classList.add('past');
             if (iso === today) cell.classList.add('today');
 
-            if (candidates.has(iso)) {
-                cell.classList.add(skipped.has(iso) ? 'skip' : 'book', 'clickable');
-                cell.title = skipped.has(iso) ? 'Skipped — click to book it' : 'Click to skip';
+            const planned = candidates.has(iso);
+            const markable = planned || (iso >= today && isWorkday(iso));
+
+            if (markable) {
+                // The user's own choice to skip outranks anything a run found:
+                // it is an instruction, not an observation.
+                const state = skipped.has(iso)
+                    ? 'skip'
+                    : outcome.get(iso) ?? (planned ? 'book' : 'later');
+                cell.classList.add(state, 'clickable');
+                cell.title = {
+                    skip: 'Skipped — click to book it',
+                    have: 'You already have this day. Clicking stops future runs re-booking it; '
+                        + 'it does not cancel the booking in Comeen.',
+                    taken: 'Someone else has this desk that day. Clicking stops it being retried.',
+                    failed: 'The last attempt failed on this day. Open Last run for the reason.',
+                    book: 'Click to skip',
+                    later: 'Beyond the booking window for now. Click to skip it in advance — it '
+                        + 'will be remembered when the window reaches it.',
+                }[state] ?? 'Click to skip';
                 cell.addEventListener('click', () => {
                     current.skipDates = skipped.has(iso)
                         ? current.skipDates.filter((entry) => entry !== iso)
@@ -362,7 +423,14 @@ const { runs = [], learnMode = false } = await chrome.storage.local.get(['runs',
     learnMode?: boolean;
 };
 fields.learnMode.checked = learnMode;
+lastLog = runs[0];
 renderLog(runs[0]);
+// The plan was drawn before the log was loaded, so colour it in now.
+renderPlan();
+
+// Opening the popup is what marks a failure as read, so the badge clears here
+// rather than waiting for the next successful run.
+void chrome.runtime.sendMessage({ type: 'popup-opened' }).catch(() => { /* worker asleep */ });
 await renderCaptures();
 
 // ── actions ─────────────────────────────────────────────────────────────────
@@ -379,7 +447,9 @@ async function triggerRun(button: HTMLButtonElement, dryRun: boolean): Promise<v
             error?: string;
         };
         if (response.ok && response.log) {
+            lastLog = response.log;
             renderLog(response.log);
+            renderPlan();
         } else {
             renderLog({
                 at: new Date().toISOString(),
