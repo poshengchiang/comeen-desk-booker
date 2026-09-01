@@ -265,15 +265,30 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /**
- * The office, as captured in August 2026.
+ * The office these defaults are for: Apify's, in Prague, as captured in
+ * August 2026.
  *
- * Hardcoded rather than fetched. The floor dropdown has to be populated before
- * any network call happens, an office layout changes about never, and a
- * hardcoded floor that is wrong is a visible mistake rather than a silent one.
+ * ─── Why real values and not placeholders ────────────────────────────────────
+ * These are not secrets — an id is useless without a Comeen session at this
+ * company — and real values are what make the extension work the moment it is
+ * installed. Placeholders would make it work for nobody, and would put "open
+ * DevTools and find two ids" into a setup guide written for people who should
+ * never have to open DevTools.
  *
- * To add a floor, read the ids from the response of
- * /api/v2/spaces/<space-uuid>/buildings/<building-id>/floors.json with the
- * floor plan open.
+ * ─── Using this somewhere else ───────────────────────────────────────────────
+ * Change these two constants. Neither needs the space UUID, and both are
+ * visible in the Network tab with the floor plan open:
+ *
+ *   floorId     in the URL of the desks_schedule.json request, and again as
+ *               `floor_id` on every desk in its response
+ *   buildingId  as `id` in the buildings.json response, which also lists every
+ *               floor with its id and name — enough to fill in FLOORS too
+ *
+ * Hardcoded rather than fetched at runtime: the floor dropdown has to be
+ * populated before any network call happens, an office layout changes about
+ * never, and the one endpoint that would return all of this needs a space UUID
+ * that does not appear in any other response, so fetching would buy a network
+ * call and a failure path without removing the constant.
  */
 export const BUILDING = { id: 5151, name: '100yards' };
 

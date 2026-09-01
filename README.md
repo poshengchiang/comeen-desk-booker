@@ -150,6 +150,25 @@ The extension tells you, in three places, so you never have to wonder whether it
 
 ---
 
+## Using this at another company
+
+The defaults are Apify's Prague office, and they are the only thing tying this to one place.
+Nothing else needs changing.
+
+Open the Comeen floor plan with DevTools on the Network tab, then edit `BUILDING` and `FLOORS` in
+[src/core/config.ts](src/core/config.ts):
+
+| Value | Where to read it |
+|---|---|
+| `floorId` | In the URL of the `desks_schedule.json` request, and again as `floor_id` on every desk in its response |
+| `buildingId` | As `id` in the `buildings.json` response — which also lists every floor with its id and name, enough to fill in `FLOORS` as well |
+
+Then `npm run bundle`. Neither value needs the space UUID, which is just as well: it appears in
+request URLs and in no response body, so it cannot be discovered.
+
+The desk names are read from your own Comeen, so `3-23` in the examples is just a desk number —
+yours will be whatever is printed on your desk.
+
 ## For developers
 
 `dist/` is committed precisely so nobody needs this section to *use* the thing. To change it:
